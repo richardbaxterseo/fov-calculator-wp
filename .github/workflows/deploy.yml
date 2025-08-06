@@ -1,0 +1,89 @@
+name: WordPress Plugin Deploy
+
+on:
+  push:
+    tags:
+      - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+  
+  release:
+    types: [published]
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Get version from tag
+      id: tag_version
+      run: |
+        echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    
+    - name: Verify version consistency
+      run: |
+        # Check version in main plugin file
+        PLUGIN_VERSION=$(grep -o "Version: [0-9.]*" fov-calculator.php | cut -d' ' -f2)
+        README_VERSION=$(grep -o "Stable tag: [0-9.]*" readme.txt | cut -d' ' -f2)
+        
+        echo "Plugin version: $PLUGIN_VERSION"
+        echo "Readme version: $README_VERSION"
+        echo "Tag version: ${{ steps.tag_version.outputs.VERSION }}"
+        
+        if [ "$PLUGIN_VERSION" != "${{ steps.tag_version.outputs.VERSION }}" ]; then
+          echo "Error: Plugin version doesn't match tag version"
+          exit 1
+        fi
+        
+        if [ "$README_VERSION" != "${{ steps.tag_version.outputs.VERSION }}" ]; then
+          echo "Error: Readme stable tag doesn't match tag version"
+          exit 1
+        fi    
+    - name: Create build directory
+      run: |
+        mkdir -p build/fov-calculator
+    
+    - name: Copy plugin files
+      run: |
+        # Copy all plugin files except development files
+        rsync -av --exclude='.*' \
+          --exclude='*.md' \
+          --exclude='composer.*' \
+          --exclude='package*.json' \
+          --exclude='tests' \
+          --exclude='bin' \
+          --exclude='build' \
+          --exclude='node_modules' \
+          --exclude='vendor' \
+          --exclude='*.log' \
+          --exclude='*.lock' \
+          --exclude='DEVELOPER-GUIDE.md' \
+          --exclude='README.md' \
+          ./ build/fov-calculator/
+        
+        # Include readme.txt (needed for WordPress)
+        cp readme.txt build/fov-calculator/
+    
+    - name: Create ZIP file
+      run: |
+        cd build
+        zip -r ../fov-calculator-${{ steps.tag_version.outputs.VERSION }}.zip fov-calculator/
+    
+    - name: Upload to release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./fov-calculator-${{ steps.tag_version.outputs.VERSION }}.zip
+        asset_name: fov-calculator-${{ steps.tag_version.outputs.VERSION }}.zip
+        asset_content_type: application/zip
+    
+    - name: Upload as artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: fov-calculator-${{ steps.tag_version.outputs.VERSION }}
+        path: ./fov-calculator-${{ steps.tag_version.outputs.VERSION }}.zip
+        retention-days: 90

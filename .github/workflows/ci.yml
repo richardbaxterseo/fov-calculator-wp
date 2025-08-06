@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        php-version: ['7.2', '7.4', '8.0', '8.1', '8.2']
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: ${{ matrix.php-version }}
+    
+    - name: Check PHP syntax
+      run: |
+        find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \;
+    
+    - name: Check file permissions
+      run: |
+        # Ensure no files have execute permissions
+        if find . -type f -name "*.php" -executable | grep .; then
+          echo "Error: PHP files should not be executable"
+          exit 1
+        fi
+    
+    - name: Validate readme.txt
+      run: |
+        # Basic validation of readme.txt format
+        if ! grep -q "=== FOV Calculator for Sim Racing ===" readme.txt; then
+          echo "Error: Invalid readme.txt header"
+          exit 1
+        fi
+        
+        if ! grep -q "Stable tag:" readme.txt; then
+          echo "Error: Missing stable tag in readme.txt"
+          exit 1
+        fi

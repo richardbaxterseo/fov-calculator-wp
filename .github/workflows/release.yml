@@ -1,0 +1,39 @@
+name: Build Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Create plugin directory
+      run: mkdir -p fov-calculator
+    
+    - name: Copy plugin files
+      run: |
+        # Copy all necessary files to the plugin directory
+        cp -r assets fov-calculator/
+        cp -r includes fov-calculator/
+        cp fov-calculator.php fov-calculator/
+        cp readme.txt fov-calculator/
+        cp README.md fov-calculator/
+        cp CHANGELOG.md fov-calculator/
+    
+    - name: Create ZIP file
+      run: zip -r fov-calculator.zip fov-calculator/
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./fov-calculator.zip
+        asset_name: fov-calculator-${{ github.event.release.tag_name }}.zip
+        asset_content_type: application/zip
